@@ -7,11 +7,41 @@ function getNicklockData() {
     try {
         fs.ensureDirSync(path.dirname(nicklockPath));
         if (!fs.existsSync(nicklockPath)) {
-            return { locks: {}, lockAll: null };
+            fs.writeJsonSync(nicklockPath, { locks: {}, lockAll: null }, { spaces: 2 });
         }
         return fs.readJsonSync(nicklockPath);
     } catch {
         return { locks: {}, lockAll: null };
+    }
+}
+
+// Get user's current nickname from thread info
+async function getCurrentNickname(api, threadID, userID) {
+    try {
+        const threadInfo = await api.getThreadInfo(threadID);
+        const participant = threadInfo.participants.find(p => p.id === userID);
+        if (participant && participant.nickname) {
+            return participant.nickname;
+        }
+        return null; // No nickname set
+    } catch (err) {
+        return null;
+    }
+}
+
+// Function to restore nickname - only once per change
+async function restoreNickname(api, threadID, userID, lockedNick) {
+    try {
+        // Get current nickname first
+        const currentNick = await getCurrentNickname(api, threadID, userID);
+
+        // Only restore if actually different
+        if (currentNick !== lockedNick) {
+            await api.changeNickname(lockedNick, threadID, userID);
+            console.log(`[NICKLOCK] Restored nickname for ${userID}: ${lockedNick}`);
+        }
+    } catch (err) {
+        console.log(`[NICKLOCK] Error restoring nickname: ${err.message}`);
     }
 }
 
@@ -26,7 +56,7 @@ module.exports = {
     async run({ api, event, Threads }) {
         const { threadID, logMessageType, logMessageData } = event;
 
-        // Check if this is a nickname change event
+        // Only handle nickname change events
         if (logMessageType !== 'log:user-nickname') return;
 
         const botID = api.getCurrentUserID();
@@ -40,16 +70,11 @@ module.exports = {
         const key = `${threadID}_${userID}`;
 
         // Check individual lock first
-        if (data.locks[key]) {
+        if (data.locks && data.locks[key]) {
             const lockedNick = data.locks[key].nickname;
-
+            // Only restore if the new nickname is different
             if (newNickname !== lockedNick) {
-                try {
-                    await api.changeNickname(lockedNick, threadID, userID);
-                    console.log(`[NICKLOCK] Restored individual nickname for ${userID}: ${lockedNick}`);
-                } catch (err) {
-                    console.error('[NICKLOCK] Failed to restore individual nickname:', err);
-                }
+                await restoreNickname(api, threadID, userID, lockedNick);
             }
             return;
         }
@@ -57,14 +82,9 @@ module.exports = {
         // Check lockAll (all members lock)
         if (data.lockAll && data.lockAll.threadID === threadID) {
             const lockedNick = data.lockAll.nickname;
-
+            // Only restore if the new nickname is different
             if (newNickname !== lockedNick) {
-                try {
-                    await api.changeNickname(lockedNick, threadID, userID);
-                    console.log(`[NICKLOCK] Restored locked nickname for ${userID}: ${lockedNick}`);
-                } catch (err) {
-                    console.error('[NICKLOCK] Failed to restore locked nickname:', err);
-                }
+                await restoreNickname(api, threadID, userID, lockedNick);
             }
         }
     }

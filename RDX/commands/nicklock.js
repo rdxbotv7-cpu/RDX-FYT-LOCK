@@ -7,7 +7,7 @@ function getNicklockData() {
   try {
     fs.ensureDirSync(path.dirname(nicklockPath));
     if (!fs.existsSync(nicklockPath)) {
-      fs.writeJsonSync(nicklockPath, { locks: {}, lockAll: null });
+      fs.writeJsonSync(nicklockPath, { locks: {}, lockAll: null }, { spaces: 2 });
     }
     return fs.readJsonSync(nicklockPath);
   } catch {
@@ -34,13 +34,13 @@ async function checkAndRestoreNickname(api, threadID, userID, newNickname) {
   if (userID === botID) return;
 
   // Check individual lock first
-  if (data.locks[key]) {
+  if (data.locks && data.locks[key]) {
     const lockedNick = data.locks[key].nickname;
     if (newNickname !== lockedNick) {
       try {
         await api.changeNickname(lockedNick, threadID, userID);
       } catch (err) {
-        console.error('Failed to restore individual nickname:', err);
+        console.log('[NICKLOCK] Bot needs admin to change nickname:', err.message);
       }
     }
     return;
@@ -53,7 +53,7 @@ async function checkAndRestoreNickname(api, threadID, userID, newNickname) {
       try {
         await api.changeNickname(lockedNick, threadID, userID);
       } catch (err) {
-        console.error('Failed to restore locked nickname:', err);
+        console.log('[NICKLOCK] Bot needs admin to change nickname:', err.message);
       }
     }
   }
@@ -208,31 +208,44 @@ Usage:
       return send.reply('Please provide a nickname to lock.\n\nUsage: nicklock @user [nickname]');
     }
 
+    // Try to change nickname, but don't fail if bot doesn't have admin
+    let nickChangeSuccess = false;
     try {
       await api.changeNickname(nickname, threadID, uid);
+      nickChangeSuccess = true;
+    } catch (err) {
+      console.log('[NICKLOCK] Bot needs admin to set nickname, but lock will still be active:', err.message);
+      nickChangeSuccess = false;
+    }
 
-      const key = `${threadID}_${uid}`;
-      data.locks[key] = {
-        nickname,
-        lockedBy: senderID,
-        lockedAt: Date.now()
-      };
-      saveNicklockData(data);
+    const key = `${threadID}_${uid}`;
+    data.locks[key] = {
+      nickname,
+      lockedBy: senderID,
+      lockedAt: Date.now()
+    };
+    saveNicklockData(data);
 
-      let name = 'Unknown';
-      try {
-        const info = await api.getUserInfo(uid);
-        name = info[uid]?.name || info[uid]?.firstName || 'Unknown';
-      } catch { }
+    let name = 'Unknown';
+    try {
+      const info = await api.getUserInfo(uid);
+      name = info[uid]?.name || info[uid]?.firstName || 'Unknown';
+    } catch { }
 
+    if (nickChangeSuccess) {
       return send.reply(`🔒 Nickname Locked
 ─────────────────
 User: ${name}
 Nickname: ${nickname}
 
 This nickname will auto-restore if changed.`);
-    } catch (error) {
-      return send.reply('Failed to set nickname. Bot may not have admin rights: ' + error.message);
+    } else {
+      return send.reply(`🔒 Nickname Locked (Pending)
+─────────────────
+User: ${name}
+Nickname: ${nickname}
+
+⚠️ Bot needs admin to set nickname, but lock is active! When user changes nickname, it will be auto-restored.`);
     }
   },
 

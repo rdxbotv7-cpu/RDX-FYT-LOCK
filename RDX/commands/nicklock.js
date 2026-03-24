@@ -64,8 +64,8 @@ module.exports = {
     credits: "SARDAR RDX",
     name: 'nicklock',
     aliases: ['locknick', 'nlock'],
-    description: "Lock a user nickname to prevent changes.",
-    usage: 'nicklock [uid/mention] [nickname] or nicklock off [uid/mention]',
+    description: "Lock your own or a user's nickname to prevent changes.",
+    usage: 'nicklock [nickname] or nicklock @user [nickname] or nicklock off or nicklock off @user',
     category: 'Group',
     groupOnly: true,
     prefix: true
@@ -116,8 +116,10 @@ module.exports = {
         return send.reply(`No locked nicknames in this group.
 
 Usage:
-- nicklock @user [nickname] - Lock nickname
-- nicklock off @user - Unlock nickname
+- nicklock @user [nickname] - Lock user's nickname
+- nicklock [nickname] - Lock your own nickname
+- nicklock off - Unlock your own nickname
+- nicklock off @user - Unlock user's nickname
 - nicklock list - Show locked nicknames`);
       }
 
@@ -172,7 +174,8 @@ Usage:
       } else if (event.messageReply) {
         uid = event.messageReply.senderID;
       } else {
-        return send.reply('Please mention a user or provide UID.');
+        // Use sender's own ID - unlock their own nickname
+        uid = senderID;
       }
 
       const key = `${threadID}_${uid}`;
@@ -190,6 +193,7 @@ Usage:
     let uid = '';
     let nickname = '';
 
+    // If no mention, no UID, no messageReply, then use sender's own ID
     if (Object.keys(mentions).length > 0) {
       uid = Object.keys(mentions)[0];
       const mentionText = mentions[uid];
@@ -201,12 +205,29 @@ Usage:
       uid = event.messageReply.senderID;
       nickname = args.join(' ');
     } else {
-      return send.reply('Please mention a user or provide UID with nickname.');
+      // Use sender's own ID - lock their own nickname
+      uid = senderID;
+      nickname = args.join(' ');
     }
 
+    // If no nickname provided, get the user's current nickname
     if (!nickname) {
-      return send.reply('Please provide a nickname to lock.\n\nUsage: nicklock @user [nickname]');
+      try {
+        const threadInfo = await api.getThreadInfo(threadID);
+        const participant = threadInfo.participantIDs.includes(uid) ? threadInfo.participants.find(p => p.id === uid) : null;
+        if (participant && participant.nickname) {
+          nickname = participant.nickname;
+        } else {
+          // Try to get from user info as fallback
+          const userInfo = await api.getUserInfo(uid);
+          nickname = userInfo[uid]?.name || userInfo[uid]?.firstName || 'User';
+        }
+      } catch {
+        nickname = 'User';
+      }
     }
+
+    // nickname is now optional - if not provided, current nickname will be used
 
     // Try to change nickname, but don't fail if bot doesn't have admin
     let nickChangeSuccess = false;

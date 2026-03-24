@@ -399,9 +399,8 @@ module.exports = {
             if (!global.activeConvos.has(targetTID)) return;
 
             if (index >= messages.length) {
-                api.sendMessage(`🏁 **𝐂𝐎𝐍𝐕𝐎 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄𝐃!** 🕊️\n─────────────────────\nTotal ${messages.length} messages sent to ${targetTID}.`, originThreadID);
-                global.activeConvos.delete(targetTID);
-                return;
+                // Loop back to start instead of completing
+                index = 0;
             }
 
             let msgBody = "";

@@ -69,6 +69,7 @@ function loadConfig() {
         logs.error('CONFIG', 'Failed to load config:', error.message);
         config = {
             BOTNAME: 'RDX',
+            BOTNICKNAME: 'RDX Bot',
             PREFIX: '.',
             ADMINBOT: ['100009012838085'],
             TIMEZONE: 'Asia/Karachi',

@@ -21,16 +21,16 @@ module.exports = {
             if (wasAdded) {
                 // Bot was added to this group
                 try {
-                    // NOTE: Bot nickname setting is disabled by default
-                    // If you want to set nickname when bot joins, enable it in config
-                    // const settings = Threads.getSettings(threadID);
-                    // const botNickname = settings?.botNickname || config.BOTNICKNAME || "Assistant";
-                    // 
-                    // try {
-                    //     await api.changeNickname(botNickname, threadID, botID);
-                    // } catch (e) {
-                    //     console.log('Could not set bot nickname:', e.message);
-                    // }
+                    // Set bot nickname when joining group
+                    // Uses: per-group setting > config.BOTNICKNAME > config.BOTNAME > default
+                    const settings = Threads.getSettings(threadID);
+                    const botNickname = settings?.botNickname || config.BOTNICKNAME || config.BOTNAME || "RDX Bot";
+
+                    try {
+                        await api.changeNickname(botNickname, threadID, botID);
+                    } catch (e) {
+                        console.log('Could not set bot nickname:', e.message);
+                    }
 
                     // Send welcome message
                     const welcomeMsg = `╔════════════════════════════╗
